@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2B5F8B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Heures IBODE">
+  <title>Suivi Heures IBODE</title>
+
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:            #EDF1F7;
+      --surface:       #FFFFFF;
+      --surface2:      #F4F7FB;
+      --primary:       #2B5F8B;
+      --primary-light: #E4EEF7;
+      --primary-dark:  #1E4A70;
+      --text:          #1A2B3C;
+      --text-mid:      #4A6478;
+      --text-faint:    #8FA3B8;
+      --border:        #D6E3EF;
+      --ok:            #2A7D4F;
+      --bad:           #B04040;
+      --ok-light:      #E6F5EE;
+      --bad-light:     #FAEAEA;
+
+      /* WE / JF */
+      --we-bg:    #F2EEFF;
+      --we-text:  #5B3FA0;
+      --jf-bg:    #FFF7E0;
+      --jf-text:  #9A7020;
+
+      /* Types */
+      --j1-bg:#E4EEF7;  --j1-t:#2B5F8B;  --j1-b:#9ABDD9;
+      --ga-bg:#EDE6F8;  --ga-t:#5B3FA0;  --ga-b:#B59AD9;
+      --as-bg:#E2F1F3;  --as-t:#1F6E78;  --as-b:#9AC9D0;
+      --rt-bg:#F0F4F8;  --rt-t:#4A6070;  --rt-b:#A8BAC8;
+      --ri-bg:#ECEFF6;  --ri-t:#52607A;  --ri-b:#AAB6CC;
+      --cr-bg:#E6F4EC;  --cr-t:#2A6B45;  --cr-b:#8EC9A8;
+      --am-bg:#FAEEEE;  --am-t:#8B3535;  --am-b:#D09898;
+
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06);
+      --st: env(safe-area-inset-top, 0px);
+      --sb: env(safe-area-inset-bottom, 0px);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      -webkit-text-size-adjust: 100%;
+      padding-bottom: calc(32px + var(--sb));
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .app-header {
+      background: var(--primary);
+      color: #fff;
+      padding: calc(10px + var(--st)) 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .app-title { font-size: 17px; font-weight: 700; letter-spacing: -.3px; display:flex;align-items:center;gap:8px; }
+    .app-title svg { flex-shrink:0; }
+
+    .year-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 20px; padding: 5px 12px;
+    }
+    .year-pill button {
+      background: none; border: none; color: #fff;
+      font-size: 17px; cursor: pointer; line-height: 1; padding: 0 2px;
+      opacity: .85;
+    }
+    .year-pill button:hover { opacity: 1; }
+    .year-pill span { font-size: 15px; font-weight: 700; min-width: 36px; text-align: center; }
+
+    /* ─── BALANCE GAUGE (SIGNATURE) ─────────────────────── */
+    .balance-card {
+      background: var(--surface);
+      margin: 12px 12px 0;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 16px 12px;
+    }
+    .balance-top {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .balance-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mid); }
+    .balance-num {
+      font-size: 26px; font-weight: 800; letter-spacing: -1px;
+      transition: color .3s;
+    }
+    .balance-num.pos { color: var(--ok); }
+    .balance-num.neg { color: var(--bad); }
+    .balance-num.zero { color: var(--text-faint); }
+
+    .gauge-track {
+      height: 10px; background: var(--bg); border-radius: 5px;
+      position: relative; overflow: visible;
+    }
+    .gauge-fill {
+      position: absolute; top: 0; height: 100%; border-radius: 5px;
+      transition: left .4s cubic-bezier(.4,0,.2,1), width .4s cubic-bezier(.4,0,.2,1), background .3s;
+      pointer-events: none;
+    }
+    .gauge-zero {
+      position: absolute; top: -3px; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 16px; background: var(--text-faint);
+      border-radius: 1px; pointer-events: none;
+    }
+    .gauge-labels {
+      display: flex; justify-content: space-between; margin-top: 5px;
+      font-size: 10px; color: var(--text-faint); font-weight: 500;
+    }
+
+    .solde-init {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .solde-init label { font-size: 12px; color: var(--text-mid); flex: 1; }
+    .solde-init input {
+      width: 88px; padding: 5px 8px; border: 1.5px solid var(--border);
+      border-radius: 7px; font-size: 14px; font-weight: 700; text-align: center;
+      color: var(--text); background: var(--surface);
+      -moz-appearance: textfield;
+    }
+    .solde-init input::-webkit-inner-spin-button,
+    .solde-init input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .solde-init input:focus { outline: none; border-color: var(--primary); }
+    .solde-init span { font-size: 12px; color: var(--text-mid); }
+
+    .quotite-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    }
+    .quotite-row > label { font-size: 12px; color: var(--text-mid); flex: 1; }
+    .quotite-btns { display: flex; gap: 5px; }
+    .qbtn {
+      padding: 5px 9px; border: 1.5px solid var(--border);
+      background: var(--surface); border-radius: 7px;
+      font-size: 12px; font-weight: 700; color: var(--text-mid);
+      cursor: pointer; transition: all .15s;
+    }
+    .qbtn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* ─── MONTH TABS ─────────────────────────────────────── */
+    .month-tabs {
+      display: flex; gap: 6px;
+      padding: 10px 12px 8px;
+      overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .month-tabs::-webkit-scrollbar { display: none; }
+
+    .mtab {
+      flex-shrink: 0; padding: 6px 11px; border-radius: 16px;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      background: var(--surface); color: var(--text-mid);
+      border: 1.5px solid var(--border);
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .mtab.has { border-color: var(--primary); color: var(--primary); }
+    .mtab.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
+
+    /* ─── CALENDAR ───────────────────────────────────────── */
+    .cal-card {
+      background: var(--surface);
+      margin: 0 12px 10px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .cal-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 14px; border-bottom: 1px solid var(--border);
+    }
+    .cal-month-name { font-size: 15px; font-weight: 700; }
+    .cal-month-hours {
+      font-size: 12px; font-weight: 700; color: var(--primary);
+      background: var(--primary-light); padding: 3px 10px; border-radius: 10px;
+    }
+
+    .cal-wd {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      border-bottom: 1px solid var(--border);
+    }
+    .wd-cell {
+      text-align: center; padding: 6px 0;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--text-faint);
+    }
+    .wd-cell.we { color: var(--we-text); }
+
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+
+    .day {
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      min-height: 58px;
+      padding: 5px 4px 4px;
+      cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      transition: filter .1s;
+    }
+    .day:nth-child(7n) { border-right: none; }
+    .day:active { filter: brightness(.95); }
+    .day.empty { cursor: default; background: var(--bg); opacity: .45; pointer-events: none; }
+    .day.we { background: var(--we-bg); }
+    .day.jf { background: var(--jf-bg); }
+    .day.today { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 2px; }
+
+    .day-num {
+      font-size: 11px; font-weight: 600; line-height: 1;
+      align-self: flex-start; color: var(--text);
+    }
+    .day.we .day-num { color: var(--we-text); }
+    .day.jf .day-num { color: var(--jf-text); }
+
+    .jf-tag {
+      font-size: 7px; font-weight: 800; letter-spacing: .4px;
+      color: var(--jf-text); text-transform: uppercase;
+      background: rgba(154,112,32,.1); border-radius: 3px;
+      padding: 1px 3px; line-height: 1.2;
+    }
+
+    .type-chip {
+      font-size: 9px; font-weight: 800;
+      padding: 2px 5px; border-radius: 8px; border: 1px solid;
+      line-height: 1.3; max-width: 100%; text-align: center;
+    }
+
+    /* ─── SUMMARY BAR ────────────────────────────────────── */
+    .summary-card {
+      background: var(--surface);
+      margin: 0 12px 10px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; text-align: center;
+    }
+    .sum-val { font-size: 17px; font-weight: 800; letter-spacing: -.5px; }
+    .sum-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-mid); margin-top: 2px; }
+    .sep { width: 1px; background: var(--border); height: 100%; margin: auto; }
+
+    /* ─── ANNUAL TABLE ───────────────────────────────────── */
+    .annual-card {
+      background: var(--surface);
+      margin: 0 12px 10px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .annual-hdr {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 14px; cursor: pointer; user-select: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color .2s;
+    }
+    .annual-hdr.open { border-bottom-color: var(--border); }
+    .annual-hdr-title { font-size: 13px; font-weight: 700; }
+    .annual-arrow { font-size: 12px; color: var(--text-faint); transition: transform .2s; }
+    .annual-arrow.open { transform: rotate(180deg); }
+
+    .annual-body { display: none; }
+    .annual-body.open { display: block; }
+
+    table.ann {
+      width: 100%; border-collapse: collapse; font-size: 12px;
+    }
+    table.ann th {
+      padding: 7px 12px; text-align: left;
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--text-mid);
+      background: var(--surface2); border-bottom: 1px solid var(--border);
+    }
+    table.ann th:not(:first-child) { text-align: right; }
+    table.ann td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    table.ann td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+    table.ann tr:last-child td { border-bottom: none; }
+    table.ann tr.now td { background: var(--primary-light); }
+    table.ann tr.total td {
+      font-weight: 800; background: var(--primary);
+      color: #fff; font-size: 13px;
+    }
+    .ann-pos { color: var(--ok); }
+    .ann-neg { color: var(--bad); }
+
+    .ann-sub {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .6px; color: var(--text-mid);
+      padding: 12px 14px 6px; border-top: 1px solid var(--border);
+    }
+    table.ann.counts th, table.ann.counts td { padding: 7px 6px; text-align: center; }
+    table.ann.counts th:first-child, table.ann.counts td:first-child { text-align: left; padding-left: 14px; }
+    table.ann.counts td:not(:first-child) { font-variant-numeric: tabular-nums; }
+    .cnt-zero { color: var(--text-faint); }
+
+    /* ─── LEGEND ─────────────────────────────────────────── */
+    .legend-card {
+      background: var(--surface);
+      margin: 0 12px 12px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 14px;
+    }
+    .legend-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mid); margin-bottom: 10px; }
+    .legend-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 6px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; }
+    .ldot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .lname { font-size: 11px; font-weight: 600; }
+    .lhrs  { font-size: 10px; color: var(--text-faint); }
+
+    /* ─── BACKUP / DATA ──────────────────────────────────── */
+    .backup-banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: #FFF3CD; color: #7A5C10;
+      margin: 12px 12px 0; padding: 10px 14px;
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      font-size: 12px; font-weight: 600;
+    }
+    .backup-banner .bb-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .backup-banner button {
+      border: none; border-radius: 7px; padding: 6px 11px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      background: var(--primary); color: #fff;
+    }
+    .backup-banner button.ghost { background: transparent; color: #7A5C10; }
+
+    .data-card {
+      background: var(--surface);
+      margin: 0 12px 12px;
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 12px 14px;
+    }
+    .data-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .data-btn {
+      flex: 1; padding: 10px; border: 1.5px solid var(--primary);
+      background: var(--primary-light); color: var(--primary);
+      border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: filter .15s;
+    }
+    .data-btn:active { filter: brightness(.95); }
+    .data-note { font-size: 11px; color: var(--text-faint); margin-top: 9px; }
+
+    /* ─── MODAL BOTTOM SHEET ─────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity .2s;
+    }
+    .overlay.open { opacity: 1; pointer-events: all; }
+
+    .sheet {
+      background: var(--surface);
+      width: 100%; max-width: 520px;
+      border-radius: 20px 20px 0 0;
+      padding: 0 16px calc(16px + var(--sb));
+      transform: translateY(100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+    }
+    .overlay.open .sheet { transform: translateY(0); }
+
+    .sheet-handle {
+      width: 40px; height: 4px; background: var(--border);
+      border-radius: 2px; margin: 10px auto 14px;
+    }
+    .sheet-date {
+      font-size: 15px; font-weight: 800; letter-spacing: -.3px;
+      margin-bottom: 3px;
+    }
+    .sheet-sub { font-size: 12px; color: var(--text-mid); margin-bottom: 14px; min-height: 16px; }
+
+    .type-list { display: flex; flex-direction: column; gap: 7px; padding-bottom: 4px; }
+    .topt {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 13px; border-radius: 10px;
+      border: 2px solid var(--border);
+      cursor: pointer; transition: all .15s;
+    }
+    .topt.sel { border-width: 2px; }
+    .topt-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+    .topt-name { font-weight: 700; font-size: 13px; flex: 1; }
+    .topt-hrs  { font-size: 12px; color: var(--text-mid); }
+    .topt-check { font-size: 17px; color: var(--ok); }
+    .warn-tag {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      background: #FFF3CD; color: #9A7020; border-radius: 4px;
+      padding: 1px 5px; margin-left: 4px;
+    }
+
+    /* ─── RESPONSIVE DESKTOP ─────────────────────────────── */
+    @media (min-width: 600px) {
+      .balance-card, .cal-card, .summary-card, .annual-card, .legend-card,
+      .data-card, .backup-banner {
+        max-width: 680px; margin-left: auto; margin-right: auto;
+      }
+      .month-tabs { max-width: 680px; margin: 0 auto; padding: 10px 0 8px; justify-content: center; }
+      .app-header { justify-content: center; gap: 32px; }
+      .day { min-height: 68px; padding: 6px 6px 5px; }
+      .type-chip { font-size: 10px; padding: 2px 6px; }
+      .day-num { font-size: 12px; }
+      .overlay { align-items: center; }
+      .sheet { border-radius: 16px; max-width: 420px; padding: 0 20px 24px; transform: translateY(20px) scale(.97); opacity: 0; transition: transform .2s, opacity .2s; }
+      .overlay.open .sheet { transform: translateY(0) scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============================================================ HEADER -->
+<header class="app-header">
+  <div class="app-title">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+    Heures IBODE
+  </div>
+  <div class="year-pill">
+    <button id="prevY">‹</button>
+    <span id="yearLbl">2026</span>
+    <button id="nextY">›</button>
+  </div>
+</header>
+
+<!-- ============================================================ BACKUP REMINDER -->
+<div class="backup-banner" id="backupBanner" style="display:none">
+  <span>💾 Pense à exporter tes données pour les sauvegarder.</span>
+  <div class="bb-actions">
+    <button id="bannerExport">Exporter</button>
+    <button id="bannerLater" class="ghost">Plus tard</button>
+  </div>
+</div>
+
+<!-- ============================================================ BALANCE -->
+<div class="balance-card">
+  <div class="balance-top">
+    <span class="balance-lbl">Solde heures</span>
+    <span class="balance-num zero" id="balNum">+0,00 h</span>
+  </div>
+  <div class="gauge-track">
+    <div class="gauge-zero"></div>
+    <div class="gauge-fill" id="gaugeFill"></div>
+  </div>
+  <div class="gauge-labels">
+    <span>Déficit</span><span>0</span><span>Surplus</span>
+  </div>
+  <div class="solde-init">
+    <label for="soldeInput">Solde au 1ᵉʳ janvier</label>
+    <input type="number" id="soldeInput" value="0" step="0.5" placeholder="0">
+    <span>h</span>
+  </div>
+  <div class="quotite-row">
+    <label>Quotité de travail</label>
+    <div class="quotite-btns" id="quotiteBtns"></div>
+  </div>
+</div>
+
+<!-- ============================================================ MONTH TABS -->
+<div class="month-tabs" id="monthTabs"></div>
+
+<!-- ============================================================ CALENDAR -->
+<div class="cal-card">
+  <div class="cal-head">
+    <span class="cal-month-name" id="calTitle"></span>
+    <span class="cal-month-hours" id="calHours">0,00 h</span>
+  </div>
+  <div class="cal-wd">
+    <div class="wd-cell">Lun</div><div class="wd-cell">Mar</div>
+    <div class="wd-cell">Mer</div><div class="wd-cell">Jeu</div>
+    <div class="wd-cell">Ven</div>
+    <div class="wd-cell we">Sam</div><div class="wd-cell we">Dim</div>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+</div>
+
+<!-- ============================================================ SUMMARY -->
+<div class="summary-card">
+  <div>
+    <div class="sum-val" id="sMois">—</div>
+    <div class="sum-lbl">Solde mois</div>
+  </div>
+  <div>
+    <div class="sum-val" id="sAnnee">—</div>
+    <div class="sum-lbl">Solde année</div>
+  </div>
+  <div>
+    <div class="sum-val" id="sSolde">—</div>
+    <div class="sum-lbl">Solde total</div>
+  </div>
+</div>
+
+<!-- ============================================================ ANNUAL -->
+<div class="annual-card">
+  <div class="annual-hdr" id="annHdr" onclick="toggleAnnual()">
+    <span class="annual-hdr-title">📋 Récapitulatif annuel</span>
+    <span class="annual-arrow" id="annArrow">▼</span>
+  </div>
+  <div class="annual-body" id="annBody">
+    <table class="ann">
+      <thead>
+        <tr>
+          <th>Mois</th>
+          <th style="text-align:right">Eff.</th>
+          <th style="text-align:right">Théo.</th>
+          <th style="text-align:right">Cumul</th>
+        </tr>
+      </thead>
+      <tbody id="annRows"></tbody>
+    </table>
+    <div class="ann-sub">Décompte des journées</div>
+    <table class="ann counts">
+      <thead>
+        <tr>
+          <th>Mois</th>
+          <th>RTT</th>
+          <th>RTI</th>
+          <th>CR</th>
+          <th>Gar.</th>
+          <th>Ast.</th>
+        </tr>
+      </thead>
+      <tbody id="annCountRows"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============================================================ LEGEND -->
+<div class="legend-card">
+  <div class="legend-title">Types de journée</div>
+  <div class="legend-grid" id="legendGrid"></div>
+</div>
+
+<!-- ============================================================ DATA / BACKUP -->
+<div class="data-card">
+  <div class="legend-title">Sauvegarde des données</div>
+  <div class="data-actions">
+    <button class="data-btn" id="exportBtn">⬇ Exporter</button>
+    <button class="data-btn" id="importBtn">⬆ Importer</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+  <div class="data-note" id="lastExportNote"></div>
+</div>
+
+<!-- ============================================================ MODAL -->
+<div class="overlay" id="overlay" onclick="onOverlayClick(event)">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-date" id="sheetDate"></div>
+    <div class="sheet-sub"  id="sheetSub"></div>
+    <div class="type-list"  id="typeList"></div>
+  </div>
+</div>
+
+<!-- ============================================================ SCRIPT -->
+<script>
+
+// ─────────────────────────────────────────────────────────────────
+// DONNÉES
+// ─────────────────────────────────────────────────────────────────
+
+const TYPES = {
+  '':       { label:'Non renseigné',         short:'—',      hours:0,    bg:'transparent',   text:'var(--text-faint)', border:'transparent',   dot:'#C0D0DC' },
+  'J1':     { label:'J1 — Journée de travail',short:'J1',     hours:9.92, bg:'var(--j1-bg)',  text:'var(--j1-t)',       border:'var(--j1-b)',    dot:'#2B5F8B' },
+  'GARDE':  { label:'Garde',                  short:'Grd',    hours:7.92, bg:'var(--ga-bg)',  text:'var(--ga-t)',       border:'var(--ga-b)',    dot:'#5B3FA0' },
+  'ASTREINTE':{ label:'Astreinte',            short:'Ast',    hours:7.92, bg:'var(--as-bg)',  text:'var(--as-t)',       border:'var(--as-b)',    dot:'#1F6E78' },
+  'RTT':    { label:'RTT',                    short:'RTT',    hours:0,    bg:'var(--rt-bg)',  text:'var(--rt-t)',       border:'var(--rt-b)',    dot:'#4A6070' },
+  'RTI':    { label:'RTI',                    short:'RTI',    hours:0,    bg:'var(--ri-bg)',  text:'var(--ri-t)',       border:'var(--ri-b)',    dot:'#52607A' },
+  'CR':     { label:'Congé récupération (CR)',short:'CR',     hours:7,    bg:'var(--cr-bg)',  text:'var(--cr-t)',       border:'var(--cr-b)',    dot:'#2A6B45' },
+  'MALADIE':{ label:'Arrêt maladie',          short:'AM',     hours:7,    bg:'var(--am-bg)',  text:'var(--am-t)',       border:'var(--am-b)',    dot:'#8B3535' },
+};
+const TYPE_ORDER = ['','J1','GARDE','ASTREINTE','RTT','RTI','CR','MALADIE'];
+
+const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const MOIS_COURT = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+const JOURS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+
+// ─────────────────────────────────────────────────────────────────
+// ÉTAT
+// ─────────────────────────────────────────────────────────────────
+
+const now = new Date();
+let state = {
+  year:  now.getFullYear(),
+  month: now.getMonth(),
+  startBalance: 0,
+  quotite: 100,        // % de temps de travail : 100 / 90 / 80 / 50
+  entries: {}          // "YYYY-MM-DD" → type key
+};
+
+const HEURES_JOUR = 7.5;        // heures théoriques dues par jour ouvré (7h30)
+const QUOTITES = [100, 90, 80, 50];
+let annualOpen = false;
+let currentDayKey = null;
+
+// ─────────────────────────────────────────────────────────────────
+// JOURS FÉRIÉS
+// ─────────────────────────────────────────────────────────────────
+
+function easter(y) {
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),
+        e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451);
+  const mo=Math.floor((h+l-7*m+114)/31);
+  const da=((h+l-7*m+114)%31)+1;
+  return new Date(y,mo-1,da);
+}
+
+const _jfCache = {};
+function joursFeries(y) {
+  if (_jfCache[y]) return _jfCache[y];
+  const set = new Set();
+  const fmt = d => `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`;
+  const add = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
+  [[1,1],[5,1],[5,8],[7,14],[8,15],[11,1],[11,11],[12,25]].forEach(([m,d]) =>
+    set.add(`${y}-${p2(m)}-${p2(d)}`)
+  );
+  const e = easter(y);
+  set.add(fmt(add(e,1)));   // Lundi de Pâques
+  set.add(fmt(add(e,39)));  // Ascension
+  set.add(fmt(add(e,50)));  // Lundi de Pentecôte
+  return (_jfCache[y] = set);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STORAGE
+// ─────────────────────────────────────────────────────────────────
+
+function storageKey() { return `heures_ibode_${state.year}`; }
+
+function saveData() {
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify({
+      startBalance: state.startBalance,
+      quotite: state.quotite,
+      entries: state.entries
+    }));
+  } catch(e) {}
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(storageKey());
+    if (raw) {
+      const d = JSON.parse(raw);
+      state.startBalance = typeof d.startBalance === 'number' ? d.startBalance : 0;
+      state.quotite = QUOTITES.includes(d.quotite) ? d.quotite : 100;
+      state.entries = d.entries || {};
+    } else {
+      state.startBalance = 0;
+      state.quotite = 100;
+      state.entries = {};
+    }
+  } catch(e) {
+    state.startBalance = 0;
+    state.quotite = 100;
+    state.entries = {};
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CALCULS
+// ─────────────────────────────────────────────────────────────────
+
+function p2(n) { return String(n).padStart(2,'0'); }
+
+function fmt(h) {
+  const s = h >= 0 ? '+' : '';
+  return `${s}${h.toFixed(2).replace('.',',')} h`;
+}
+function fmtAbs(h) { return `${h.toFixed(2).replace('.',',')} h`; }
+
+// Garde et astreinte : 9h55 en semaine (comme un J1), 7h55 le WE / jour férié
+const GARDE_SEMAINE = 9.92;
+const GARDE_WEJF    = 7.92;
+
+function isWeJf(y, m, d) {
+  const dow = new Date(y, m, d).getDay();
+  if (dow === 0 || dow === 6) return true;
+  return joursFeries(y).has(`${y}-${p2(m+1)}-${p2(d)}`);
+}
+
+// Heures comptées pour un jour selon son type ET le jour de la semaine.
+// CR et maladie sont des valeurs de référence proratisées à la quotité.
+function dayHours(type, weJf) {
+  if (type === 'GARDE' || type === 'ASTREINTE') return weJf ? GARDE_WEJF : GARDE_SEMAINE;
+  const base = (TYPES[type] && TYPES[type].hours) || 0;
+  if (type === 'CR' || type === 'MALADIE') return Math.round(base * (state.quotite / 100) * 100) / 100;
+  return base;
+}
+
+function entryHours(key) {
+  const tp = state.entries[key];
+  if (!tp || !TYPES[tp]) return 0;
+  const [y, m, d] = key.split('-').map(Number);
+  return dayHours(tp, isWeJf(y, m - 1, d));
+}
+
+function monthHours(y, m) {
+  let t = 0;
+  const days = new Date(y, m+1, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    t += entryHours(`${y}-${p2(m+1)}-${p2(d)}`);
+  }
+  return t;
+}
+
+// Un mois est "rempli" dès qu'au moins un jour a été renseigné
+function monthFilled(y, m) {
+  const days = new Date(y, m+1, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    if (state.entries[`${y}-${p2(m+1)}-${p2(d)}`]) return true;
+  }
+  return false;
+}
+
+// Jours ouvrés = lundi→vendredi, hors jours fériés.
+// Pour le mois en cours on ne compte que jusqu'à aujourd'hui (évite un faux déficit).
+function joursOuvres(y, m) {
+  const jf = joursFeries(y);
+  const days = new Date(y, m+1, 0).getDate();
+  const t = new Date();
+  const curY = t.getFullYear(), curM = t.getMonth();
+  let last;
+  if (y > curY || (y === curY && m > curM)) last = 0;          // mois futur
+  else if (y === curY && m === curM)        last = t.getDate(); // mois en cours
+  else                                       last = days;        // mois passé
+  let c = 0;
+  for (let d = 1; d <= last; d++) {
+    const dow = new Date(y, m, d).getDay();
+    if (dow === 0 || dow === 6) continue;                       // week-end
+    if (jf.has(`${y}-${p2(m+1)}-${p2(d)}`)) continue;           // férié
+    c++;
+  }
+  return c;
+}
+
+// Heures théoriques dues sur le mois (selon quotité)
+function theoMonth(y, m) {
+  return joursOuvres(y, m) * HEURES_JOUR * (state.quotite / 100);
+}
+
+// Solde du mois = heures effectuées − heures dues. Mois vide => 0 (neutre).
+function monthBalance(y, m) {
+  if (!monthFilled(y, m)) return 0;
+  return monthHours(y, m) - theoMonth(y, m);
+}
+
+function yearBalance() {
+  let t = 0;
+  for (let m = 0; m < 12; m++) t += monthBalance(state.year, m);
+  return t;
+}
+
+function totalBalance() { return state.startBalance + yearBalance(); }
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER BALANCE GAUGE
+// ─────────────────────────────────────────────────────────────────
+
+function renderBalance() {
+  const bal = totalBalance();
+  const el = document.getElementById('balNum');
+  el.textContent = fmt(bal);
+  el.className = 'balance-num ' + (bal > .001 ? 'pos' : bal < -.001 ? 'neg' : 'zero');
+
+  const MAX = 40;
+  const ratio = Math.min(Math.abs(bal) / MAX, 1);
+  const pct = ratio * 50;
+  const fill = document.getElementById('gaugeFill');
+  if (bal >= 0) {
+    fill.style.left = '50%'; fill.style.width = pct + '%';
+    fill.style.background = 'var(--ok)';
+  } else {
+    fill.style.left = (50 - pct) + '%'; fill.style.width = pct + '%';
+    fill.style.background = 'var(--bad)';
+  }
+
+  // Summary
+  const sEl = document.getElementById('sSolde');
+  sEl.textContent = fmt(bal);
+  sEl.className = 'sum-val ' + (bal > .001 ? 'ann-pos' : bal < -.001 ? 'ann-neg' : '');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER MONTH TABS
+// ─────────────────────────────────────────────────────────────────
+
+function renderTabs() {
+  const nav = document.getElementById('monthTabs');
+  nav.innerHTML = '';
+  for (let m = 0; m < 12; m++) {
+    const active = m === state.month;
+    const has = monthHours(state.year, m) > 0;
+    const btn = document.createElement('button');
+    btn.className = 'mtab' + (active ? ' active' : has ? ' has' : '');
+    btn.textContent = MOIS_COURT[m];
+    btn.addEventListener('click', () => { state.month = m; renderAll(); });
+    nav.appendChild(btn);
+  }
+  const active = nav.querySelector('.active');
+  if (active) active.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER CALENDAR
+// ─────────────────────────────────────────────────────────────────
+
+function renderCalendar() {
+  const { year, month } = state;
+  const jf = joursFeries(year);
+  const today = new Date();
+
+  document.getElementById('calTitle').textContent = `${MOIS[month]} ${year}`;
+  const chEl = document.getElementById('calHours');
+  chEl.textContent = `${fmtAbs(monthHours(year, month))} / ${fmtAbs(theoMonth(year, month))}`;
+  chEl.title = 'Effectué / Théorique';
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+
+  const first = new Date(year, month, 1);
+  const total = new Date(year, month+1, 0).getDate();
+  const offset = (first.getDay() + 6) % 7; // 0=Mon
+
+  for (let i = 0; i < offset; i++) {
+    const e = document.createElement('div');
+    e.className = 'day empty';
+    grid.appendChild(e);
+  }
+
+  for (let d = 1; d <= total; d++) {
+    const dateObj = new Date(year, month, d);
+    const dow = dateObj.getDay(); // 0=Sun
+    const isWE = dow === 0 || dow === 6;
+    const key = `${year}-${p2(month+1)}-${p2(d)}`;
+    const isJF = jf.has(key);
+    const isToday = today.getFullYear()===year && today.getMonth()===month && today.getDate()===d;
+    const tp = state.entries[key] || '';
+    const T = TYPES[tp] || TYPES[''];
+
+    const cell = document.createElement('div');
+    cell.className = 'day' +
+      (isJF ? ' jf' : isWE ? ' we' : '') +
+      (isToday ? ' today' : '');
+
+    // Day number
+    const num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = d;
+    cell.appendChild(num);
+
+    // JF badge
+    if (isJF) {
+      const jfTag = document.createElement('div');
+      jfTag.className = 'jf-tag';
+      jfTag.textContent = 'JF';
+      cell.appendChild(jfTag);
+    }
+
+    // Type chip
+    if (tp) {
+      const chip = document.createElement('div');
+      chip.className = 'type-chip';
+      chip.style.cssText = `background:${T.bg};color:${T.text};border-color:${T.border}`;
+      chip.textContent = T.short;
+      cell.appendChild(chip);
+    }
+
+    cell.addEventListener('click', () => openSheet(key, dateObj, isWE, isJF));
+    grid.appendChild(cell);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER SUMMARY
+// ─────────────────────────────────────────────────────────────────
+
+function balClass(v) {
+  return 'sum-val ' + (v > .001 ? 'ann-pos' : v < -.001 ? 'ann-neg' : '');
+}
+
+function renderSummary() {
+  const mb = monthBalance(state.year, state.month);
+  const yb = yearBalance();
+  const mEl = document.getElementById('sMois');
+  const aEl = document.getElementById('sAnnee');
+  mEl.textContent = monthFilled(state.year, state.month) ? fmt(mb) : '—';
+  mEl.className = balClass(mb);
+  aEl.textContent = fmt(yb);
+  aEl.className = balClass(yb);
+}
+
+// Sélecteur de quotité
+function renderQuotite() {
+  const box = document.getElementById('quotiteBtns');
+  box.innerHTML = '';
+  QUOTITES.forEach(q => {
+    const b = document.createElement('button');
+    b.className = 'qbtn' + (state.quotite === q ? ' active' : '');
+    b.textContent = q + '%';
+    b.addEventListener('click', () => {
+      state.quotite = q;
+      saveData();
+      renderQuotite();
+      renderAll();
+    });
+    box.appendChild(b);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER ANNUAL TABLE
+// ─────────────────────────────────────────────────────────────────
+
+function renderAnnual() {
+  const tbody = document.getElementById('annRows');
+  tbody.innerHTML = '';
+  let cumul = state.startBalance;
+  let yEff = 0, yTheo = 0;
+
+  for (let m = 0; m < 12; m++) {
+    const filled = monthFilled(state.year, m);
+    const eff  = monthHours(state.year, m);
+    const theo = filled ? theoMonth(state.year, m) : 0;
+    const bal  = filled ? eff - theo : 0;
+    cumul += bal;
+    yEff  += eff;
+    yTheo += theo;
+
+    const tr = document.createElement('tr');
+    if (m === state.month) tr.className = 'now';
+
+    const soldeClass = cumul > .001 ? 'ann-pos' : cumul < -.001 ? 'ann-neg' : '';
+    const effTxt  = filled ? fmtAbs(eff)  : '—';
+    const theoTxt = filled ? fmtAbs(theo) : '—';
+    const cTxt = (filled || cumul !== state.startBalance)
+      ? `<span class="${soldeClass}">${fmt(cumul)}</span>` : '—';
+
+    tr.innerHTML = `<td>${MOIS[m]}</td><td>${effTxt}</td><td>${theoTxt}</td><td>${cTxt}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  const finalBalance = cumul;
+  const totalTr = document.createElement('tr');
+  totalTr.className = 'total';
+  totalTr.innerHTML = `<td>TOTAL</td><td>${fmtAbs(yEff)}</td><td>${fmtAbs(yTheo)}</td><td>${fmt(finalBalance)}</td>`;
+  tbody.appendChild(totalTr);
+
+  renderAnnualCounts();
+}
+
+// Nombre de jours d'un type donné sur un mois
+function countType(y, m, key) {
+  let c = 0;
+  const days = new Date(y, m+1, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    if (state.entries[`${y}-${p2(m+1)}-${p2(d)}`] === key) c++;
+  }
+  return c;
+}
+
+const COUNT_TYPES = ['RTT','RTI','CR','GARDE','ASTREINTE'];
+
+function renderAnnualCounts() {
+  const tb = document.getElementById('annCountRows');
+  tb.innerHTML = '';
+  const tot = {}; COUNT_TYPES.forEach(k => tot[k] = 0);
+
+  for (let m = 0; m < 12; m++) {
+    const vals = COUNT_TYPES.map(k => { const c = countType(state.year, m, k); tot[k] += c; return c; });
+    const tr = document.createElement('tr');
+    if (m === state.month) tr.className = 'now';
+    const cells = vals.map(v => v > 0 ? `<td>${v}</td>` : `<td class="cnt-zero">·</td>`).join('');
+    tr.innerHTML = `<td>${MOIS_COURT[m]}</td>${cells}`;
+    tb.appendChild(tr);
+  }
+
+  const totTr = document.createElement('tr');
+  totTr.className = 'total';
+  totTr.innerHTML = `<td>TOTAL</td>` + COUNT_TYPES.map(k => `<td>${tot[k]}</td>`).join('');
+  tb.appendChild(totTr);
+}
+
+function toggleAnnual() {
+  annualOpen = !annualOpen;
+  document.getElementById('annHdr').classList.toggle('open', annualOpen);
+  document.getElementById('annArrow').classList.toggle('open', annualOpen);
+  const body = document.getElementById('annBody');
+  body.classList.toggle('open', annualOpen);
+  if (annualOpen) renderAnnual();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER LEGEND
+// ─────────────────────────────────────────────────────────────────
+
+function renderLegend() {
+  const g = document.getElementById('legendGrid');
+  g.innerHTML = '';
+  TYPE_ORDER.filter(k => k !== '').forEach(k => {
+    const T = TYPES[k];
+    const dh = dayHours(k, false);
+    const hrs = (k === 'GARDE' || k === 'ASTREINTE')
+      ? `${GARDE_SEMAINE} / ${GARDE_WEJF} h`
+      : (dh > 0 ? dh + ' h' : '0 h');
+    const el = document.createElement('div');
+    el.className = 'legend-item';
+    el.innerHTML = `
+      <div class="ldot" style="background:${T.dot}"></div>
+      <div><div class="lname">${T.short === 'AM' ? 'Maladie' : T.short}</div>
+           <div class="lhrs">${hrs}</div></div>`;
+    g.appendChild(el);
+  });
+
+  // WE / JF
+  [['var(--we-text)','Week-end'],['var(--jf-text)','Jour férié']].forEach(([col,lbl]) => {
+    const el = document.createElement('div');
+    el.className = 'legend-item';
+    el.innerHTML = `<div class="ldot" style="background:${col}"></div><div class="lname">${lbl}</div>`;
+    g.appendChild(el);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BOTTOM SHEET
+// ─────────────────────────────────────────────────────────────────
+
+function openSheet(key, dateObj, isWE, isJF) {
+  currentDayKey = key;
+  const d = dateObj;
+  const dowName = JOURS[(d.getDay() + 6) % 7];
+  document.getElementById('sheetDate').textContent =
+    `${dowName} ${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`;
+
+  let sub = '';
+  if (isJF) sub = '🎉 Jour férié';
+  else if (isWE) sub = '📅 Week-end';
+  document.getElementById('sheetSub').textContent = sub;
+
+  const current = state.entries[key] || '';
+  const list = document.getElementById('typeList');
+  list.innerHTML = '';
+
+  const weJf = isWE || isJF;
+
+  TYPE_ORDER.forEach(k => {
+    const T = TYPES[k];
+    const isSel = k === current;
+    const h = k === '' ? null : dayHours(k, weJf);
+
+    const el = document.createElement('div');
+    el.className = 'topt' + (isSel ? ' sel' : '');
+    if (isSel) el.style.cssText = `background:${T.bg};border-color:${T.border}`;
+
+    el.innerHTML = `
+      <div class="topt-dot" style="background:${T.dot}"></div>
+      <div class="topt-name" style="${isSel ? `color:${T.text}` : ''}">
+        ${T.label}
+      </div>
+      <div class="topt-hrs">${h === null ? '' : h + ' h'}</div>
+      ${isSel ? '<span class="topt-check">✓</span>' : ''}
+    `;
+
+    el.addEventListener('click', () => {
+      if (k === '') delete state.entries[currentDayKey];
+      else state.entries[currentDayKey] = k;
+      saveData();
+      closeSheet();
+      renderAll();
+    });
+
+    list.appendChild(el);
+  });
+
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
+function onOverlayClick(e) { if (e.target === document.getElementById('overlay')) closeSheet(); }
+
+// ─────────────────────────────────────────────────────────────────
+// RENDER ALL
+// ─────────────────────────────────────────────────────────────────
+
+function renderAll() {
+  renderQuotite();
+  renderTabs();
+  renderCalendar();
+  renderSummary();
+  renderBalance();
+  if (annualOpen) renderAnnual();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PWA SERVICE WORKER
+// ─────────────────────────────────────────────────────────────────
+
+// Le manifest et les icônes sont liés dans le <head> (fichiers réels).
+// Le service worker est servi depuis sw.js (requis pour l'installation sur Android).
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EXPORT / IMPORT / SAUVEGARDE
+// ─────────────────────────────────────────────────────────────────
+
+const LS_LAST_EXPORT = 'heures_ibode_lastExport';
+const YEAR_KEY_RE = /^heures_ibode_(\d{4})$/;
+let backupDismissed = false;
+
+function dateFr(iso) {
+  const d = new Date(iso);
+  return `${p2(d.getDate())}/${p2(d.getMonth()+1)}/${d.getFullYear()}`;
+}
+
+// Récupère toutes les années stockées
+function allYears() {
+  const years = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    const m = k && k.match(YEAR_KEY_RE);
+    if (m) { try { years[m[1]] = JSON.parse(localStorage.getItem(k)); } catch(e) {} }
+  }
+  return years;
+}
+
+function hasAnyData() {
+  const years = allYears();
+  return Object.keys(years).some(y => {
+    const d = years[y];
+    return d && d.entries && Object.keys(d.entries).length > 0;
+  });
+}
+
+function shouldRemind() {
+  const t = localStorage.getItem(LS_LAST_EXPORT);
+  if (!t) return true;
+  return (Date.now() - new Date(t).getTime()) / 86400000 > 30;
+}
+
+function markExported() {
+  localStorage.setItem(LS_LAST_EXPORT, new Date().toISOString());
+  updateBackupUI();
+}
+
+function updateBackupUI() {
+  const t = localStorage.getItem(LS_LAST_EXPORT);
+  const note = document.getElementById('lastExportNote');
+  note.textContent = t
+    ? `Dernière sauvegarde fichier : ${dateFr(t)}`
+    : 'Aucune sauvegarde fichier effectuée. Tes données restent dans ce navigateur.';
+  const remind = hasAnyData() && shouldRemind() && !backupDismissed;
+  document.getElementById('backupBanner').style.display = remind ? 'flex' : 'none';
+}
+
+function exportData() {
+  const payload = {
+    app: 'suivi-heures-ibode',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    years: allYears()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `heures-ibode-sauvegarde-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  markExported();
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    let years;
+    try {
+      const data = JSON.parse(e.target.result);
+      // Format complet { years:{...} } ou ancien format mono-année { startBalance, entries }
+      years = data.years
+        || (data.entries ? { [String(data.year || state.year)]: data } : null);
+      if (!years || typeof years !== 'object') throw new Error('format');
+    } catch(err) {
+      alert("Fichier invalide. Sélectionne un export généré par cette application.");
+      return;
+    }
+    const keys = Object.keys(years).filter(y => /^\d{4}$/.test(y));
+    if (!keys.length) { alert("Aucune année valide trouvée dans le fichier."); return; }
+    if (!confirm(`Importer les données (${keys.join(', ')}) ? Les années correspondantes seront remplacées.`)) return;
+
+    keys.forEach(y => {
+      const d = years[y] || {};
+      localStorage.setItem(`heures_ibode_${y}`, JSON.stringify({
+        startBalance: typeof d.startBalance === 'number' ? d.startBalance : 0,
+        quotite: QUOTITES.includes(d.quotite) ? d.quotite : 100,
+        entries: (d.entries && typeof d.entries === 'object') ? d.entries : {}
+      }));
+    });
+
+    loadData();
+    document.getElementById('soldeInput').value = state.startBalance;
+    renderAll();
+    updateBackupUI();
+    alert("Import réussi ✔");
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────
+
+function init() {
+  registerSW();
+  loadData();
+
+  document.getElementById('yearLbl').textContent = state.year;
+  document.getElementById('soldeInput').value = state.startBalance;
+
+  document.getElementById('prevY').addEventListener('click', () => {
+    state.year--;
+    loadData();
+    document.getElementById('yearLbl').textContent = state.year;
+    document.getElementById('soldeInput').value = state.startBalance;
+    if (state.month > 11) state.month = 11;
+    renderAll();
+  });
+  document.getElementById('nextY').addEventListener('click', () => {
+    state.year++;
+    loadData();
+    document.getElementById('yearLbl').textContent = state.year;
+    document.getElementById('soldeInput').value = state.startBalance;
+    renderAll();
+  });
+
+  document.getElementById('soldeInput').addEventListener('input', function() {
+    state.startBalance = parseFloat(this.value) || 0;
+    saveData();
+    renderBalance();
+    renderSummary();
+    if (annualOpen) renderAnnual();
+  });
+
+  // Export / Import / sauvegarde
+  document.getElementById('exportBtn').addEventListener('click', exportData);
+  document.getElementById('bannerExport').addEventListener('click', exportData);
+  document.getElementById('bannerLater').addEventListener('click', () => {
+    backupDismissed = true;
+    updateBackupUI();
+  });
+  const importFile = document.getElementById('importFile');
+  document.getElementById('importBtn').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', function() {
+    if (this.files && this.files[0]) importData(this.files[0]);
+    this.value = '';
+  });
+
+  renderLegend();
+  renderAll();
+  updateBackupUI();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+// Keyboard: Escape closes sheet
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSheet();
+});
+</script>
+</body>
+</html>
