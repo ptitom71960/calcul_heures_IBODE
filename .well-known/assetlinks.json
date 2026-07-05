@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.ptitom71960.heuresibode",
+        "sha256_cert_fingerprints": ["B5:EB:BC:69:E8:3F:0B:EE:D0:2F:7C:CE:B3:FE:31:E7:06:D6:BF:4E:DE:E8:B2:43:A2:AD:1E:45:51:8D:4B:A3"]
+      }
+    }]
