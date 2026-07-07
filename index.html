@@ -394,6 +394,15 @@
       margin-bottom: 3px;
     }
     .sheet-sub { font-size: 12px; color: var(--text-mid); margin-bottom: 14px; min-height: 16px; }
+    .adjust-box { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+    .adjust-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .adjust-row { display: flex; gap: 8px; align-items: stretch; }
+    .adj-btn { flex: 0 0 auto; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2); color: var(--text-mid); font-weight: 700; font-size: 13px; cursor: pointer; }
+    .adj-btn:active { background: var(--primary-light); }
+    #adjInput { flex: 1; min-width: 0; text-align: center; padding: 10px; border-radius: 10px; border: 1px solid var(--border); font-size: 16px; font-weight: 700; color: var(--text); }
+    .adjust-note { font-size: 11px; color: var(--text-mid); margin-top: 8px; line-height: 1.45; }
+    .adj-tag { font-size: 9px; font-weight: 800; margin-top: 2px; padding: 1px 4px; border-radius: 6px; background: var(--ok-light); color: var(--ok); border: 1px solid var(--ok); }
+    .adj-tag.neg { background: var(--bad-light); color: var(--bad); border-color: var(--bad); }
 
     .type-list { display: flex; flex-direction: column; gap: 7px; padding-bottom: 4px; }
     .topt {
@@ -573,6 +582,15 @@
     <div class="sheet-date" id="sheetDate"></div>
     <div class="sheet-sub"  id="sheetSub"></div>
     <div class="type-list"  id="typeList"></div>
+    <div class="adjust-box">
+      <div class="adjust-title">± Ajustement manuel</div>
+      <div class="adjust-row">
+        <button type="button" class="adj-btn" id="adjMinus">−30 min</button>
+        <input type="text" id="adjInput" inputmode="decimal" placeholder="0" autocomplete="off">
+        <button type="button" class="adj-btn" id="adjPlus">+30 min</button>
+      </div>
+      <div class="adjust-note">En heures : <b>+1,5</b> = 1 h 30 en plus (dépassement, réunion…), <b>−0,75</b> = 45 min en moins (parti plus tôt). S'ajoute aux heures du jour.</div>
+    </div>
   </div>
 </div>
 
@@ -609,10 +627,11 @@ let state = {
   month: now.getMonth(),
   startBalance: 0,
   quotite: 100,        // % de temps de travail : 100 / 90 / 80 / 50
-  entries: {}          // "YYYY-MM-DD" → type key
+  entries: {},         // "YYYY-MM-DD" → type key
+  adjust: {}           // "YYYY-MM-DD" → heures en plus/en moins (ex: 1.5, -0.75)
 };
 
-const HEURES_JOUR = 7.5;        // heures théoriques dues par jour ouvré (7h30)
+const HEURES_JOUR = 7;          // heures théoriques dues par jour ouvré (7 h/jour = 35 h/semaine)
 const QUOTITES = [100, 90, 80, 50];
 let annualOpen = false;
 let currentDayKey = null;
@@ -658,9 +677,11 @@ function saveData() {
     localStorage.setItem(storageKey(), JSON.stringify({
       startBalance: state.startBalance,
       quotite: state.quotite,
-      entries: state.entries
+      entries: state.entries,
+      adjust: state.adjust
     }));
   } catch(e) {}
+  scheduleAutoExport();
 }
 
 function loadData() {
@@ -671,15 +692,18 @@ function loadData() {
       state.startBalance = typeof d.startBalance === 'number' ? d.startBalance : 0;
       state.quotite = QUOTITES.includes(d.quotite) ? d.quotite : 100;
       state.entries = d.entries || {};
+      state.adjust = (d.adjust && typeof d.adjust === 'object') ? d.adjust : {};
     } else {
       state.startBalance = 0;
       state.quotite = 100;
       state.entries = {};
+      state.adjust = {};
     }
   } catch(e) {
     state.startBalance = 0;
     state.quotite = 100;
     state.entries = {};
+    state.adjust = {};
   }
 }
 
@@ -715,10 +739,11 @@ function dayHours(type, weJf) {
 }
 
 function entryHours(key) {
+  const adj = (state.adjust && state.adjust[key]) || 0;
   const tp = state.entries[key];
-  if (!tp || !TYPES[tp]) return 0;
+  if (!tp || !TYPES[tp]) return adj;
   const [y, m, d] = key.split('-').map(Number);
-  return dayHours(tp, isWeJf(y, m - 1, d));
+  return dayHours(tp, isWeJf(y, m - 1, d)) + adj;
 }
 
 function monthHours(y, m) {
@@ -734,7 +759,8 @@ function monthHours(y, m) {
 function monthFilled(y, m) {
   const days = new Date(y, m+1, 0).getDate();
   for (let d = 1; d <= days; d++) {
-    if (state.entries[`${y}-${p2(m+1)}-${p2(d)}`]) return true;
+    const k = `${y}-${p2(m+1)}-${p2(d)}`;
+    if (state.entries[k] || (state.adjust && state.adjust[k])) return true;
   }
   return false;
 }
@@ -890,6 +916,15 @@ function renderCalendar() {
       chip.style.cssText = `background:${T.bg};color:${T.text};border-color:${T.border}`;
       chip.textContent = T.short;
       cell.appendChild(chip);
+    }
+
+    // Badge ajustement manuel
+    const adj = (state.adjust && state.adjust[key]) || 0;
+    if (adj) {
+      const at = document.createElement('div');
+      at.className = 'adj-tag' + (adj < 0 ? ' neg' : '');
+      at.textContent = (adj > 0 ? '+' : '') + String(adj).replace('.', ',');
+      cell.appendChild(at);
     }
 
     cell.addEventListener('click', () => openSheet(key, dateObj, isWE, isJF));
@@ -1063,6 +1098,10 @@ function openSheet(key, dateObj, isWE, isJF) {
   else if (isWE) sub = '📅 Week-end';
   document.getElementById('sheetSub').textContent = sub;
 
+  const adjIn = document.getElementById('adjInput');
+  const curAdj = (state.adjust && state.adjust[key]) || 0;
+  adjIn.value = curAdj ? String(curAdj).replace('.', ',') : '';
+
   const current = state.entries[key] || '';
   const list = document.getElementById('typeList');
   list.innerHTML = '';
@@ -1102,6 +1141,28 @@ function openSheet(key, dateObj, isWE, isJF) {
 }
 
 function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
+
+// ─── Ajustement manuel (V5) ───
+function parseAdj(str) {
+  const v = parseFloat(String(str).replace(',', '.'));
+  return isNaN(v) ? 0 : Math.round(v * 100) / 100;
+}
+
+function setAdjust(v) {
+  if (!currentDayKey) return;
+  if (!state.adjust) state.adjust = {};
+  if (!v) delete state.adjust[currentDayKey];
+  else state.adjust[currentDayKey] = v;
+  saveData();
+  renderAll();
+}
+
+function stepAdjust(delta) {
+  const input = document.getElementById('adjInput');
+  const v = Math.round((parseAdj(input.value) + delta) * 100) / 100;
+  input.value = v ? String(v).replace('.', ',') : '';
+  setAdjust(v);
+}
 function onOverlayClick(e) { if (e.target === document.getElementById('overlay')) closeSheet(); }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1124,6 +1185,7 @@ function renderAll() {
 // Le manifest et les icônes sont liés dans le <head> (fichiers réels).
 // Le service worker est servi depuis sw.js (requis pour l'installation sur Android).
 function registerSW() {
+  if (IS_NATIVE) return; // Appli native Capacitor : pas de service worker
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1134,7 +1196,37 @@ function registerSW() {
 // EXPORT / IMPORT / SAUVEGARDE
 // ─────────────────────────────────────────────────────────────────
 
+// Détection Capacitor (appli native Android) — le pont est injecté avant le chargement de la page
+const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function fsPlugin() {
+  return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) || null;
+}
+
+const NATIVE_BACKUP_FILE = 'heures-ibode-sauvegarde.json';
+let fsPermChecked = false;
+
+// Écrit le fichier de sauvegarde dans Documents/ (ou stockage appli en secours)
+async function nativeWrite(filename, json) {
+  const FS = fsPlugin();
+  if (!FS) throw new Error('Filesystem indisponible');
+  if (!fsPermChecked) {
+    try {
+      const st = await FS.checkPermissions();
+      if (st && st.publicStorage && st.publicStorage !== 'granted') await FS.requestPermissions();
+    } catch(e) {}
+    fsPermChecked = true;
+  }
+  try {
+    await FS.writeFile({ path: filename, data: json, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true });
+    return 'Documents/' + filename;
+  } catch(e) {
+    await FS.writeFile({ path: filename, data: json, directory: 'EXTERNAL', encoding: 'utf8', recursive: true });
+    return 'stockage de l\'appli/' + filename;
+  }
+}
+
 const LS_LAST_EXPORT = 'heures_ibode_lastExport';
+const LS_EXPORT_HASH = 'heures_ibode_lastExportHash';
 const YEAR_KEY_RE = /^heures_ibode_(\d{4})$/;
 let backupDismissed = false;
 
@@ -1158,7 +1250,8 @@ function hasAnyData() {
   const years = allYears();
   return Object.keys(years).some(y => {
     const d = years[y];
-    return d && d.entries && Object.keys(d.entries).length > 0;
+    return d && ((d.entries && Object.keys(d.entries).length > 0)
+      || (d.adjust && Object.keys(d.adjust).length > 0));
   });
 }
 
@@ -1178,29 +1271,88 @@ function updateBackupUI() {
   const note = document.getElementById('lastExportNote');
   note.textContent = t
     ? `Dernière sauvegarde fichier : ${dateFr(t)}`
-    : 'Aucune sauvegarde fichier effectuée. Tes données restent dans ce navigateur.';
+    : (IS_NATIVE
+        ? 'Aucune sauvegarde fichier pour le moment. Tes données sont stockées dans l\'appli.'
+        : 'Aucune sauvegarde fichier effectuée. Tes données restent dans ce navigateur.');
   const remind = hasAnyData() && shouldRemind() && !backupDismissed;
   document.getElementById('backupBanner').style.display = remind ? 'flex' : 'none';
 }
 
-function exportData() {
-  const payload = {
+function buildPayload() {
+  return {
     app: 'suivi-heures-ibode',
     version: 1,
     exportedAt: new Date().toISOString(),
     years: allYears()
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+}
+
+function browserDownload(json) {
+  const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `heures-ibode-sauvegarde-${new Date().toISOString().slice(0,10)}.json`;
+  const d = new Date();
+  a.download = `heures-ibode-sauvegarde-${d.toISOString().slice(0,10)}-${p2(d.getHours())}h${p2(d.getMinutes())}.json`;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function finishExport() {
+  try { localStorage.setItem(LS_EXPORT_HASH, JSON.stringify(allYears())); } catch(e) {}
   markExported();
 }
+
+// Export manuel (bouton)
+function exportData() {
+  const json = JSON.stringify(buildPayload(), null, 2);
+  if (IS_NATIVE && fsPlugin()) {
+    nativeWrite(NATIVE_BACKUP_FILE, json)
+      .then(loc => { finishExport(); alert('Sauvegarde enregistrée dans : ' + loc); })
+      .catch(() => { browserDownload(json); finishExport(); });
+  } else {
+    browserDownload(json);
+    finishExport();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EXPORT AUTOMATIQUE (V4)
+// Appli native : écriture silencieuse dans Documents/ 3 s après la
+// dernière saisie. Navigateur : téléchargement après 15 s.
+// Dans les deux cas, uniquement si les données ont changé.
+// ─────────────────────────────────────────────────────────────────
+
+let autoExportTimer = null;
+
+function runAutoExport() {
+  autoExportTimer = null;
+  if (!hasAnyData()) return;
+  try {
+    if (JSON.stringify(allYears()) === localStorage.getItem(LS_EXPORT_HASH)) return;
+  } catch(e) {}
+  if (IS_NATIVE && fsPlugin()) {
+    const json = JSON.stringify(buildPayload(), null, 2);
+    nativeWrite(NATIVE_BACKUP_FILE, json).then(finishExport).catch(() => {});
+  } else {
+    exportData();
+  }
+}
+
+function scheduleAutoExport() {
+  clearTimeout(autoExportTimer);
+  autoExportTimer = setTimeout(runAutoExport, IS_NATIVE ? 3000 : 15000);
+}
+
+// Si on quitte l'appli avant les 15 s, on exporte immédiatement
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && autoExportTimer) {
+    clearTimeout(autoExportTimer);
+    runAutoExport();
+  }
+});
 
 function importData(file) {
   const reader = new FileReader();
@@ -1225,7 +1377,8 @@ function importData(file) {
       localStorage.setItem(`heures_ibode_${y}`, JSON.stringify({
         startBalance: typeof d.startBalance === 'number' ? d.startBalance : 0,
         quotite: QUOTITES.includes(d.quotite) ? d.quotite : 100,
-        entries: (d.entries && typeof d.entries === 'object') ? d.entries : {}
+        entries: (d.entries && typeof d.entries === 'object') ? d.entries : {},
+        adjust: (d.adjust && typeof d.adjust === 'object') ? d.adjust : {}
       }));
     });
 
@@ -1248,6 +1401,10 @@ function init() {
 
   document.getElementById('yearLbl').textContent = state.year;
   document.getElementById('soldeInput').value = state.startBalance;
+
+  document.getElementById('adjMinus').addEventListener('click', () => stepAdjust(-0.5));
+  document.getElementById('adjPlus').addEventListener('click', () => stepAdjust(0.5));
+  document.getElementById('adjInput').addEventListener('change', function() { setAdjust(parseAdj(this.value)); });
 
   document.getElementById('prevY').addEventListener('click', () => {
     state.year--;
