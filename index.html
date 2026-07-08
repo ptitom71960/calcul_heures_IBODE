@@ -603,9 +603,9 @@
 
 const TYPES = {
   '':       { label:'Non renseigné',         short:'—',      hours:0,    bg:'transparent',   text:'var(--text-faint)', border:'transparent',   dot:'#C0D0DC' },
-  'J1':     { label:'J1 — Journée de travail',short:'J1',     hours:9.92, bg:'var(--j1-bg)',  text:'var(--j1-t)',       border:'var(--j1-b)',    dot:'#2B5F8B' },
-  'GARDE':  { label:'Garde',                  short:'Grd',    hours:7.92, bg:'var(--ga-bg)',  text:'var(--ga-t)',       border:'var(--ga-b)',    dot:'#5B3FA0' },
-  'ASTREINTE':{ label:'Astreinte',            short:'Ast',    hours:7.92, bg:'var(--as-bg)',  text:'var(--as-t)',       border:'var(--as-b)',    dot:'#1F6E78' },
+  'J1':     { label:'J1 — Journée de travail',short:'J1',     hours:9+55/60, bg:'var(--j1-bg)',  text:'var(--j1-t)',       border:'var(--j1-b)',    dot:'#2B5F8B' },
+  'GARDE':  { label:'Garde',                  short:'Grd',    hours:7+55/60, bg:'var(--ga-bg)',  text:'var(--ga-t)',       border:'var(--ga-b)',    dot:'#5B3FA0' },
+  'ASTREINTE':{ label:'Astreinte',            short:'Ast',    hours:7+55/60, bg:'var(--as-bg)',  text:'var(--as-t)',       border:'var(--as-b)',    dot:'#1F6E78' },
   'RTT':    { label:'RTT',                    short:'RTT',    hours:0,    bg:'var(--rt-bg)',  text:'var(--rt-t)',       border:'var(--rt-b)',    dot:'#4A6070' },
   'RTI':    { label:'RTI',                    short:'RTI',    hours:0,    bg:'var(--ri-bg)',  text:'var(--ri-t)',       border:'var(--ri-b)',    dot:'#52607A' },
   'CR':     { label:'Congé récupération (CR)',short:'CR',     hours:7,    bg:'var(--cr-bg)',  text:'var(--cr-t)',       border:'var(--cr-b)',    dot:'#2A6B45' },
@@ -720,8 +720,17 @@ function fmt(h) {
 function fmtAbs(h) { return `${h.toFixed(2).replace('.',',')} h`; }
 
 // Garde et astreinte : 9h55 en semaine (comme un J1), 7h55 le WE / jour férié
-const GARDE_SEMAINE = 9.92;
-const GARDE_WEJF    = 7.92;
+// Valeurs exactes en minutes (comme AgileTime) : 9h55 = 9 + 55/60
+const GARDE_SEMAINE = 9 + 55/60;
+const GARDE_WEJF    = 7 + 55/60;
+
+// Formatage "9h55" / "7 h" pour l'affichage des durées
+function fmtHM(h) {
+  const t = Math.abs(h);
+  let hh = Math.floor(t), mm = Math.round((t - hh) * 60);
+  if (mm === 60) { hh++; mm = 0; }
+  return (h < 0 ? '−' : '') + (mm ? hh + 'h' + p2(mm) : hh + ' h');
+}
 
 function isWeJf(y, m, d) {
   const dow = new Date(y, m, d).getDay();
@@ -734,7 +743,10 @@ function isWeJf(y, m, d) {
 function dayHours(type, weJf) {
   if (type === 'GARDE' || type === 'ASTREINTE') return weJf ? GARDE_WEJF : GARDE_SEMAINE;
   const base = (TYPES[type] && TYPES[type].hours) || 0;
-  if (type === 'CR' || type === 'MALADIE') return Math.round(base * (state.quotite / 100) * 100) / 100;
+  if (type === 'CR' || type === 'MALADIE') {
+    if (weJf) return 0; // un WE/férié n'est pas dû : un CR/AM ce jour-là ne crédite rien
+    return Math.round(base * (state.quotite / 100) * 100) / 100;
+  }
   return base;
 }
 
@@ -765,17 +777,36 @@ function monthFilled(y, m) {
   return false;
 }
 
-// Jours ouvrés = lundi→vendredi, hors jours fériés.
-// Pour le mois en cours on ne compte que jusqu'à aujourd'hui (évite un faux déficit).
+// Dernier jour du mois ayant une saisie (type ou ajustement)
+function lastFilledDay(y, m) {
+  const days = new Date(y, m+1, 0).getDate();
+  for (let d = days; d >= 1; d--) {
+    const k = `${y}-${p2(m+1)}-${p2(d)}`;
+    if (state.entries[k] || (state.adjust && state.adjust[k])) return d;
+  }
+  return 0;
+}
+
+// Jours ouvrés dus = lundi→vendredi, hors jours fériés.
+// Mois passé : tout le mois. Mois courant/futur : le dû suit la saisie —
+// on compte jusqu'au dernier jour renseigné (les jours pré-remplis ont donc
+// leur dû en face), et pour le mois courant au moins jusqu'à hier
+// (aujourd'hui ne devient dû qu'une fois renseigné).
 function joursOuvres(y, m) {
   const jf = joursFeries(y);
   const days = new Date(y, m+1, 0).getDate();
   const t = new Date();
   const curY = t.getFullYear(), curM = t.getMonth();
   let last;
-  if (y > curY || (y === curY && m > curM)) last = 0;          // mois futur
-  else if (y === curY && m === curM)        last = t.getDate(); // mois en cours
-  else                                       last = days;        // mois passé
+  if (y < curY || (y === curY && m < curM)) {
+    last = days;                                   // mois passé
+  } else if (y === curY && m === curM) {
+    const todayKey = `${y}-${p2(m+1)}-${p2(t.getDate())}`;
+    const todayFilled = !!(state.entries[todayKey] || (state.adjust && state.adjust[todayKey]));
+    last = Math.max(todayFilled ? t.getDate() : t.getDate() - 1, lastFilledDay(y, m));
+  } else {
+    last = lastFilledDay(y, m);                    // mois futur : jusqu'au dernier jour saisi
+  }
   let c = 0;
   for (let d = 1; d <= last; d++) {
     const dow = new Date(y, m, d).getDay();
@@ -1062,8 +1093,8 @@ function renderLegend() {
     const T = TYPES[k];
     const dh = dayHours(k, false);
     const hrs = (k === 'GARDE' || k === 'ASTREINTE')
-      ? `${GARDE_SEMAINE} / ${GARDE_WEJF} h`
-      : (dh > 0 ? dh + ' h' : '0 h');
+      ? `${fmtHM(GARDE_SEMAINE)} / ${fmtHM(GARDE_WEJF)}`
+      : (dh > 0 ? fmtHM(dh) : '0 h');
     const el = document.createElement('div');
     el.className = 'legend-item';
     el.innerHTML = `
@@ -1122,7 +1153,7 @@ function openSheet(key, dateObj, isWE, isJF) {
       <div class="topt-name" style="${isSel ? `color:${T.text}` : ''}">
         ${T.label}
       </div>
-      <div class="topt-hrs">${h === null ? '' : h + ' h'}</div>
+      <div class="topt-hrs">${h === null ? '' : fmtHM(h)}</div>
       ${isSel ? '<span class="topt-check">✓</span>' : ''}
     `;
 
