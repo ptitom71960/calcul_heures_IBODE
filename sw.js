@@ -1,5 +1,5 @@
 // Service worker — Suivi Heures IBODE
-const CACHE = 'heures-ibode-v3';
+const CACHE = 'heures-ibode-v4';
 const ASSETS = [
   './',
   './index.html',
